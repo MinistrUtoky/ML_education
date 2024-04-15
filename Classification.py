@@ -76,7 +76,8 @@ class Classification:
         print("For threshold of {0}:".format(self.threshold))
         self.write_metrics_from(TP, TN, FP, FN, len(X_train_standardized))
 
-        self.brute_force_ROC(X_train_standardized, Ytrain, weight, iters)
+        self.brute_force_ROC(X_train_standardized, Ytrain, weight)
+        #self.ROC_and_stone(X_train_standardized, Ytrain, iters)
 
     def write_metrics_from(self, TP, TN, FP, FN, N):
         Accuracy = self.Accuracy(TP, TN, N)
@@ -96,7 +97,7 @@ class Classification:
         print("alpha:", alpha)
         print("beta:", beta)
 
-    def brute_force_ROC(self, X, Y, weight, iters):
+    def brute_force_ROC(self, X, Y, weight):
         thresholds = np.linspace(0,1,100)
         FTPRs = []
         Max_Accuracy, Max_TP_TN_FP_FN = 0, (0,0,0,0)
@@ -150,16 +151,17 @@ class Classification:
         p = np.flip(np.sort(p, axis=0), axis=0)
         thresholds = np.linspace(0,1,100)
         AUC = 0
+        print(p)
+        FTPRs = []
         for threshold in thresholds:
             FPR, TPR = 0, 0
-            FTPRs = []
             for i in range(len(p)):
-                if (p[i][0] > threshold) == 0:
+                if p[i][2] == 0:
                     FPR += 1/(FP+TN)
                     AUC += TPR/(FP+TN)
                 else:
                     TPR += 1/(TP+FN)
-                FTPRs.append([FPR, TPR])
+            FTPRs.append([FPR, TPR])
         FTPRs = np.array(FTPRs)
         xplt = FTPRs.T[0]
         yplt = FTPRs.T[1]
