@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import load_digits
 
@@ -21,8 +22,8 @@ from sklearn.datasets import load_digits
 
 class BinaryDecisionTree:
     H_min = 0.1
-    N_min = 2
-    Depth_max = 16
+    N_min = 1
+    Depth_max = 20
     depth_array = [[] for _ in range(Depth_max+1)]
     node0 = [None, None, None]
 
@@ -55,9 +56,9 @@ class BinaryDecisionTree:
         Xtrain, Ytrain = train[:-1], train[-1]
         Xvalidation, Yvalidation = validation[:-1], validation[-1]
         Xtest, Ytest = test[:-1], test[-1]
-        return [np.array([Xtrain, Ytrain.reshape(1, Ytrain.shape[0])]),
-                np.array([Xvalidation, Yvalidation.reshape(1, Yvalidation.shape[0])]),
-                np.array([Xtest, Ytest.reshape(1, Ytest.shape[0])])]
+        return [[Xtrain, Ytrain.reshape(1, Ytrain.shape[0])],
+                [Xvalidation, Yvalidation.reshape(1, Yvalidation.shape[0])],
+                [Xtest, Ytest.reshape(1, Ytest.shape[0])]]
 
     def monte_carlo_2(self, X, Y, train_slice=0.6, test_slice=0.2):
         return self.monte_carlo(
@@ -67,9 +68,9 @@ class BinaryDecisionTree:
             train_slice, test_slice)
 
     def XY_train_validation_test(self, X, Y):
-        train_percentage = 8 #random.Random.randint(0, 100)
+        train_percentage = 80 #random.Random.randint(0, 100)
         validation_percentage = 0 #random.Random.randint(0, 100 - train_percentage)
-        test_percentage = 2#100-train_percentage-validation_percentage
+        test_percentage = 20#100-train_percentage-validation_percentage
 
         XY = self.monte_carlo_2(X, Y, train_percentage/100, test_percentage/100)
         XY_train = XY[0]
@@ -90,8 +91,8 @@ class BinaryDecisionTree:
         best_tau = self.best_tau_for_a_node(xi, yi, H, classes)
         # halve sample with given tau
         self.node0 = [best_tau, self.collect_child_nodes(x, y, attribute_index+1, xi<best_tau, xi>best_tau, classes, 1), yi[indices]]
-        self.show_tree(self.node0)
-        self.show_tree_ends(self.node0, 0)
+        #self.show_tree(self.node0)
+        #self.show_tree_ends(self.node0, 0)
 
     def collect_child_nodes(self, X, Y, attribute_index, left_indices, right_indices, classes, depth):
         node_left, node_right = None, None
@@ -100,11 +101,11 @@ class BinaryDecisionTree:
         #left
         xi, yi = X[attribute_index], Y.reshape(1, -1)[0]
         if len(xi[left_indices]) == self.N_min:
-            node_left = [None, None, xi[left_indices]]
+            node_left = [None, None, yi[left_indices]]
         elif len(xi[left_indices]) > self.N_min and sum(left_indices) != 0:
             H = self.enthropy(yi[left_indices], classes)
             if H < self.H_min:
-                node_left = [None, None, xi[left_indices]]
+                node_left = [None, None, yi[left_indices]]
             else:
                 best_tau = self.best_tau_for_a_node(xi[left_indices], yi[left_indices], H, classes)
                 node_left = [best_tau, self.collect_child_nodes(X, Y, attribute_index+1,
@@ -113,11 +114,11 @@ class BinaryDecisionTree:
         #right
         xi, yi = X[attribute_index], Y.reshape(1, -1)[0]
         if len(xi[right_indices]) == self.N_min:
-            node_right = [None, None, xi[right_indices]]
+            node_right = [None, None, yi[right_indices]]
         elif len(xi[right_indices]) > self.N_min and sum(right_indices) != 0:
             H = self.enthropy(yi[right_indices], classes)
             if H < self.H_min:
-                node_left = [None, None, xi[right_indices]]
+                node_right = [None, None, yi[right_indices]]
             else:
                 best_tau = self.best_tau_for_a_node(xi[right_indices], yi[right_indices], H, classes)
                 node_right = [best_tau, self.collect_child_nodes(X, Y, attribute_index+1,
@@ -159,50 +160,69 @@ class BinaryDecisionTree:
             print(" " * padding_coef + str(self.depth_array[i]))
             padding_coef -= 2
     #endregion
-    '''
-    Вычислить точность (Accuracy) 
-    и построить confusion matrix полученной модели на обучающей и тестовой выборках.
 
-    Построить гистограммы уверенностей правильно распознанных объектов и ошибочных.
-    '''
     def test_and_review(self, X, Y, classes):
-        p = self.predict_classes(X)
+        p, pbs = self.predict_classes(X)
         correct_predictions = 0
         confusion_matrix = np.zeros(shape=(len(classes), len(classes)))
-        print(confusion_matrix)
-        TP, TN, FP, FN = 0, 0, 0, 0
+        wrong_pbs, right_pbs = [], []
         for i in range(len(p)):
+            confusion_matrix[int(Y[i][0])][int(p[i])] += 1
             if Y[i][0] == p[i]:
+                right_pbs.append(pbs[i])
                 correct_predictions += 1
-            if Y[i][0] == 1 and p[i] == 1:
-                TP += 1
-            elif Y[i][0] == 0 and p[i] == 0:
-                TN += 1
-            elif Y[i][0] == 0 and p[i] == 1:
-                FP += 1
-            elif Y[i][0] == 1 and p[i] == 0:
-                FN += 1
+            else:
+                wrong_pbs.append(pbs[i])
         Accuracy = correct_predictions/len(Y)
         print("Accuracy:", Accuracy)
         print("Confusion matrix:")
-        #print("\t\tPositive Negative\nPositive\t{0}\t\t{1}\nNegative\t{2}\t\t{3}\n".format(TP, FP, FN, TN))
+        print(confusion_matrix)
+        self.hist_probabilites(wrong_pbs, right_pbs)
+
+    def hist_probabilites(self, wrong_pbs, right_pbs):
+        plt.hist(wrong_pbs, color='r', label='Wrong decisions confidence')
+        plt.xlabel("set index")
+        plt.ylabel("probability")
+        plt.xlim((0, 1))
+        plt.legend()
+        plt.show()
+        plt.hist(right_pbs, color='b', label='Right decisions confidence')
+        plt.xlabel("set index")
+        plt.ylabel("probability")
+        plt.xlim((0, 1))
+        plt.legend()
+        plt.show()
 
     def predict_classes(self, X):
-        p = []
+        predictions, probabilities = [], []
         for x in X:
-            self.predict_class(x)
-        return p
+            prediction, probability = self.predict_class(x)
+            predictions.append(prediction)
+            probabilities.append(probability)
+        return predictions, probabilities
 
     def predict_class(self, x):
+        '''
+        :param x: set of attributes
+        :return: tuple (prediction, probability)
+        '''
         current_node = self.node0
         i = 0
         while current_node[0] != None:
             if x[i] > current_node[0]:
+                if current_node[1][1] == None:
+                    break
                 current_node = current_node[1][1]
             else:
+                if current_node[1][0] == None:
+                    break
                 current_node = current_node[1][0]
-        print(current_node[2])
-        return
+            i+=1
+        node_result = current_node[2].tolist()
+        prediction = max(node_result, key=node_result.count)
+        probability = node_result.count(prediction)/len(node_result)
+        return prediction, probability
+
 
 
     #region Information
