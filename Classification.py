@@ -10,8 +10,8 @@ class Classification:
     learning_rate = 1e-4
 
     def __init__(self):
-        foot = self.random_normal_football(170, 10, self.N)
-        basket = self.random_normal_basketball(200, 15, self.N)
+        foot = self.random_normal_football(160, 10, self.N)
+        basket = self.random_normal_basketball(165, 15, self.N)
         self.classify(foot, basket)
 
     #region Permutation
@@ -35,7 +35,7 @@ class Classification:
                 axis=1),
             train_slice, test_slice)
     def XY_train_validation_test(self, X, Y):
-        train_percentage = 100 #random.Random.randint(0, 100)
+        train_percentage = 80 #random.Random.randint(0, 100)
         validation_percentage = 0 #random.Random.randint(0, 100 - train_percentage)
         test_percentage = 100-train_percentage-validation_percentage
 
@@ -45,6 +45,8 @@ class Classification:
         XY_test = XY[2]
         return XY_train, XY_validation, XY_test
     #endregion
+
+    #region Classification
     def classify(self, footballers, basketballers):
         Y = [0]*len(footballers)
         X = np.append(footballers, basketballers)
@@ -58,10 +60,10 @@ class Classification:
         Xtest, Ytest = XY_test[0].T, XY_test[1].T
 
         X_train_standardized = (Xtrain - Xtrain.mean()) / Xtrain.std()
-        #X_test_standardized = (Xtest - Xtest.mean()) / Xtest.std()
+        X_test_standardized = (Xtest - Xtest.mean()) / Xtest.std()
 
         weight = self.regress(X_train_standardized, Ytrain, self.learning_rate, iters)
-        p = self.predict_classes(X_train_standardized, weight) > self.threshold
+        p = self.predict_classes(X_test_standardized, weight) > self.threshold
         TP, TN, FP, FN = 0, 0, 0, 0
         for i in range(len(p)):
             if Ytrain[i][0] == 1 and p[i] == 1:
@@ -76,7 +78,7 @@ class Classification:
         print("For threshold of {0}:".format(self.threshold))
         self.write_metrics_from(TP, TN, FP, FN, len(X_train_standardized))
 
-        self.brute_force_ROC(X_train_standardized, Ytrain, weight)
+        self.brute_force_ROC(X_test_standardized, Ytest, weight)
         #self.ROC_and_stone(X_train_standardized, Ytrain, iters)
 
     def write_metrics_from(self, TP, TN, FP, FN, N):
@@ -137,41 +139,6 @@ class Classification:
         plt.title('AUC={}'.format(round(AUC,4)))
         plt.show()
 
-    def ROC_and_stone(self, X, Y, iters):
-        self.threshold = 0
-        w = self.regress(X, Y, self.learning_rate, iters)
-        p = self.predict_classes(X, w)
-        TP = len(p)
-        TN = 0
-        FP = len(p)
-        FN = 0
-        p = np.concatenate(
-                (p.copy().reshape(len(p), -1), X.copy().reshape(len(X), -1), Y.copy().reshape(len(Y), -1)),
-                axis=1)
-        p = np.flip(np.sort(p, axis=0), axis=0)
-        thresholds = np.linspace(0,1,100)
-        AUC = 0
-        print(p)
-        FTPRs = []
-        for threshold in thresholds:
-            FPR, TPR = 0, 0
-            for i in range(len(p)):
-                if p[i][2] == 0:
-                    FPR += 1/(FP+TN)
-                    AUC += TPR/(FP+TN)
-                else:
-                    TPR += 1/(TP+FN)
-            FTPRs.append([FPR, TPR])
-        FTPRs = np.array(FTPRs)
-        xplt = FTPRs.T[0]
-        yplt = FTPRs.T[1]
-        plt.plot([0, 1], [0, 1])
-        plt.plot(xplt, yplt)
-        plt.xlabel('FPR')
-        plt.ylabel('TPR')
-        plt.title('AUC={}'.format(round(AUC,4)))
-        plt.show()
-
     def regress(self, Xtrain, Ytrain, learning_rate, iters):
         Xtrain = np.insert(Xtrain, 0, 1, axis=1)
         w = np.ones(Xtrain.shape[1])
@@ -181,6 +148,7 @@ class Classification:
 
     def predict_classes(self, X, w):
         return self.y(np.insert(X, 0, 1, axis=1), w)
+    #endregion
 
     #region Classification values
     @staticmethod
@@ -220,6 +188,7 @@ class Classification:
     @staticmethod
     def g(a):
         return 1 / (1 + np.exp(-a))
+
     def y(self, F, w, b=0):
         return self.g(F@w)
 
@@ -240,6 +209,7 @@ class Classification:
     @staticmethod
     def random_normal_football(mu_0, sigma_0, N):
         return np.random.normal(mu_0, sigma_0, (1, N))[0]
+
     @staticmethod
     def random_normal_basketball(mu_1, sigma_1, N):
         return np.random.normal(mu_1, sigma_1, (1, N))[0]
