@@ -82,7 +82,7 @@ class BinaryDecisionTree:
     #region Training
     def train(self, Xtrain, Ytrain, classes):
         indices = True
-        x = np.random.permutation(Xtrain.T)
+        x = Xtrain.T.copy()
         y = Ytrain.copy()
         attribute_index = 0
         xi, yi = x[attribute_index][indices][0], y[indices][0].reshape(1, -1)[0]
