@@ -4,17 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import load_digits
 
-'''
-Бонусные задания (необязательные):
-5. В качестве разделяющих функций использовать разделение гиперплоскостями не параллельными осям координат.
-
-6. В качестве разделяющих функций использовать разделение гиперповерхностями, 
-полученными с помощью базисных функций phi (нелинейное разделение).
-'''
 class BinaryDecisionTree:
-    H_min : float
-    N_min : int
-    Depth_max : int
+    H_min = 0.1
+    N_min = 1
+    Depth_max = 20
     depth_array : list
 
     def __init__(self):
@@ -23,26 +16,43 @@ class BinaryDecisionTree:
         Xtrain, Ytrain = XY_train[0].T, XY_train[1].T
         Xtest, Ytest = XY_test[0].T, XY_test[1].T
 
-        weights = np.random.normal(size=Xtrain.shape[1])
-        Xtrainhyperplaned = self.hyperplane_it(Xtrain, weights)
-        Xtesthyperplaned = self.hyperplane_it(Xtest, weights)
+        feature_indices = np.arange(Xtrain.shape[1])
+        feature_indices = np.random.permutation(feature_indices).reshape(int(Xtrain.shape[1]/2), 2)
+        ABs = np.random.normal(size=Xtrain.shape[1]).reshape(int(Xtrain.shape[1]/2), 2)
+        Xtrainhyperplaned = self.hyperplane_it(Xtrain, feature_indices, ABs)
+        Xtesthyperplaned = self.hyperplane_it(Xtest, feature_indices, ABs)
 
-        node0 = self.train_with_validation(Xtrainhyperplaned, Ytrain, classes)#self.train_with_validation(Xtrain, Ytrain, classes)
+        possible_bases = [np.cos, np.sin, np.tan, np.tanh, np.cosh, np.sinh, np.round]
+        bases = [possible_bases[random.randint(0, len(possible_bases)-1)] for i in range(int(Xtrain.shape[1]/2))]
+        Xtrainhypersurfaced = self.hypersurface_it(Xtrain, feature_indices, ABs, bases)
+        Xtesthypersurfaced = self.hypersurface_it(Xtest, feature_indices, ABs, bases)
+
+        node0 = self.train_with_validation(Xtrainhypersurfaced, Ytrain, classes)#self.train_with_validation(Xtrain, Ytrain, classes)
         print("Train set reivew:")
-        Accuracy, confusion_matrix, wrong_pbs, right_pbs = self.test_and_review(node0, Xtrainhyperplaned, Ytrain, classes)
+        Accuracy, confusion_matrix, wrong_pbs, right_pbs = self.test_and_review(node0, Xtrainhypersurfaced, Ytrain, classes)
         print("Accuracy:", Accuracy)
         print("Confusion matrix:")
         print(confusion_matrix)
         self.hist_probabilites(wrong_pbs, right_pbs)
         print("Test set reivew:")
-        Accuracy, confusion_matrix, wrong_pbs, right_pbs = self.test_and_review(node0, Xtesthyperplaned, Ytest, classes)
+        Accuracy, confusion_matrix, wrong_pbs, right_pbs = self.test_and_review(node0, Xtesthypersurfaced, Ytest, classes)
         print("Accuracy:", Accuracy)
         print("Confusion matrix:")
         print(confusion_matrix)
         self.hist_probabilites(wrong_pbs, right_pbs)
 
-    def hyperplane_it(self, X, weights):
-        return X * weights.T
+    def hyperplane_it(self, X, feature_indices, abs):
+        X = X.T
+        for i in range(len(feature_indices)):
+            X[feature_indices[i][0]] = abs[i][0]*X[feature_indices[i][0]] + abs[i][1]*X[feature_indices[i][1]]
+        return X.T
+
+    def hypersurface_it(self, X, feature_indices, abs, bases):
+        X = X.T
+        for i in range(len(feature_indices)):
+            X[feature_indices[i][0]] = abs[i][0]*bases[i](X[feature_indices[i][0]]) + abs[i][1]*bases[i](X[feature_indices[i][1]])
+        return X.T
+
     #region Data
     def fetch_data(self):
         digits = load_digits()
@@ -73,9 +83,9 @@ class BinaryDecisionTree:
             train_slice, test_slice)
 
     def XY_train_validation_test(self, X, Y):
-        train_percentage = 32 #random.Random.randint(0, 100)
+        train_percentage = 8 #random.Random.randint(0, 100)
         validation_percentage = 0 #random.Random.randint(0, 100 - train_percentage)
-        test_percentage = 8#100-train_percentage-validation_percentage
+        test_percentage = 2#100-train_percentage-validation_percentage
 
         XY = self.monte_carlo_2(X, Y, train_percentage/100, test_percentage/100)
         XY_train = XY[0]
@@ -109,10 +119,10 @@ class BinaryDecisionTree:
         best_node0 = [None, None, None]
         for i in range(training_iterations):
             print("Iteration", i)
-            self.Depth_max = random.randint(20, 24)
+            self.Depth_max = random.randint(17, 32)
             self.criteria = criterias[random.randint(0, 2)]
-            self.H_min = random.randint(5, 1000) / 1000.0
-            self.N_min = random.randint(2, 32)
+            self.H_min = random.randint(1, 100000) / 100000.0
+            self.N_min = random.randint(1, 8)
             node0 = train(Xtrain, Ytrain, classes)
             acc, _, _, _ = self.test_and_review(node0, Xtrain, Ytrain, classes)
             if acc > max_acc:
@@ -137,12 +147,9 @@ class BinaryDecisionTree:
             attribute_index = 0
             xi, yi = x[attribute_index][indices][0], y[indices][0].reshape(1, -1)[0]
             H = self.criteria(y, classes)
-            # halve sample with given tau
             node0 = [random_tau,
                      self.collect_child_nodes(x, y, attribute_index + 1, xi < random_tau, xi > random_tau, classes, 1),
                      yi[indices]]
-            # self.show_tree(node0)
-            # self.show_tree_ends(node0, 0)
             return node0
         training_iterations = 100
         max_acc = 0
@@ -214,8 +221,9 @@ class BinaryDecisionTree:
         if len(Taus) > 1:
             for i in range(len(Taus)-1):
                 Taus[i] = (Taus[i] + Taus[i+1])/2.0
+            Taus = Taus[:-1]
         else:
-            Taus += 0.5
+            return Taus[0] + 0.5
         max_Info_gain = 0
         best_tau = Taus[0]
         for tau in Taus:
@@ -269,13 +277,13 @@ class BinaryDecisionTree:
         plt.hist(wrong_pbs, color='r', label='Wrong decisions confidence')
         plt.xlabel("set index")
         plt.ylabel("probability")
-        plt.xlim((0, 1))
+        plt.xlim((-0.1, 1.1))
         plt.legend()
         plt.show()
         plt.hist(right_pbs, color='b', label='Right decisions confidence')
         plt.xlabel("set index")
         plt.ylabel("probability")
-        plt.xlim((0, 1))
+        plt.xlim((-0.1, 1.1))
         plt.legend()
         plt.show()
 
