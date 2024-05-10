@@ -1,5 +1,4 @@
-from Classification import Classification
-from DecisionTree import BinaryDecisionTree
+from DecisionTree2 import BinaryDecisionTree
 
 if __name__ == '__main__':
     c = BinaryDecisionTree()
