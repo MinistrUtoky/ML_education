@@ -5,9 +5,9 @@ import numpy as np
 from sklearn.datasets import load_digits
 
 class BinaryDecisionTree:
-    H_min = 0.0001
+    H_min = 0.1
     N_min = 1
-    Depth_max = 16
+    Depth_max = 20
     depth_array : list
 
     def __init__(self):
@@ -17,7 +17,6 @@ class BinaryDecisionTree:
         Xvalidation, Yvalidation = XY_validation[0].T, XY_validation[1].T
         Xtest, Ytest = XY_test[0].T, XY_test[1].T
 
-        '''
         feature_indices = np.arange(Xtrain.shape[1])
         feature_indices = np.random.permutation(feature_indices).reshape(int(Xtrain.shape[1]/2), 2)
         ABs = np.random.normal(size=Xtrain.shape[1]).reshape(int(Xtrain.shape[1]/2), 2)
@@ -28,7 +27,7 @@ class BinaryDecisionTree:
         bases = [possible_bases[random.randint(0, len(possible_bases)-1)] for i in range(int(Xtrain.shape[1]/2))]
         Xtrainhypersurfaced = self.hypersurface_it(Xtrain, feature_indices, ABs, bases)
         Xtesthypersurfaced = self.hypersurface_it(Xtest, feature_indices, ABs, bases)
-        '''
+
         node0 = self.train_with_validation(Xtrain, Ytrain, Xvalidation, Yvalidation, classes)#self.train_with_validation(Xtrain, Ytrain, classes)
         print("Train set reivew:")
         Accuracy, confusion_matrix, wrong_pbs, right_pbs = self.test_and_review(node0, Xtrain, Ytrain, classes)
@@ -86,8 +85,8 @@ class BinaryDecisionTree:
 
     def XY_train_validation_test(self, X, Y):
         train_percentage = 8 #random.Random.randint(0, 100)
-        validation_percentage = 1 #random.Random.randint(0, 100 - train_percentage)
-        test_percentage = 1#100-train_percentage-validation_percentage
+        validation_percentage = 0 #random.Random.randint(0, 100 - train_percentage)
+        test_percentage = 2#100-train_percentage-validation_percentage
 
         XY = self.monte_carlo_2(X, Y, train_percentage/100, test_percentage/100)
         XY_train = XY[0]
@@ -105,12 +104,12 @@ class BinaryDecisionTree:
             attribute_index = 0
             xi, yi = x[attribute_index][indices][0], y[indices][0].reshape(1, -1)[0]
             H = self.criteria(y, classes)
-            best_attribute_index, best_tau = self.best_tau_for_a_node(Xtrain, yi, H, classes)
-            node0 = [(best_attribute_index, best_tau),
-                     self.collect_child_nodes(x, y, best_attribute_index, xi < best_tau, xi > best_tau, classes, 1),
-                     np.array(yi[indices][0])]
+            best_tau = self.best_tau_for_a_node(xi, yi, H, classes)
+            node0 = [best_tau,
+                     self.collect_child_nodes(x, y, attribute_index + 1, xi < best_tau, xi > best_tau, classes, 1),
+                     yi[indices]]
             return node0
-        training_iterations = 1
+        training_iterations = 100
         max_acc = 0
         criterias = [self.enthropy, self.gini, self.misclassification_error]
         self.criteria = self.enthropy
@@ -118,13 +117,13 @@ class BinaryDecisionTree:
         best_criteria = self.enthropy
         best_criteria_delta = 1e+256
         best_N_min = 0
-        best_node0 = [(None, None), None, None]
+        best_node0 = [None, None, None]
         for i in range(training_iterations):
             print("Iteration", i)
-            #self.Depth_max = random.randint(14, 18)
-            #self.criteria = criterias[random.randint(0, 2)]
-            #self.H_min = random.randint(1, 100) / 100.0
-            #self.N_min = random.randint(1, 8)
+            self.Depth_max = random.randint(17, 32)
+            self.criteria = criterias[random.randint(0, 2)]
+            self.H_min = random.randint(1, 100000) / 100000.0
+            self.N_min = random.randint(1, 8)
             node0 = train(Xtrain, Ytrain, classes)
             acc, _, _, _ = self.test_and_review(node0, Xvalidation, Yvalidation, classes)
             if acc > max_acc:
@@ -149,8 +148,8 @@ class BinaryDecisionTree:
             attribute_index = 0
             xi, yi = x[attribute_index][indices][0], y[indices][0].reshape(1, -1)[0]
             H = self.criteria(y, classes)
-            node0 = [attribute_index, random_tau,
-                     self.collect_child_nodes(x, y, xi < random_tau, xi > random_tau, classes, 1),
+            node0 = [random_tau,
+                     self.collect_child_nodes(x, y, attribute_index + 1, xi < random_tau, xi > random_tau, classes, 1),
                      yi[indices]]
             return node0
         training_iterations = 100
@@ -161,7 +160,7 @@ class BinaryDecisionTree:
         best_criteria = self.enthropy
         best_criteria_delta = 1e+256
         best_N_min = 0
-        best_node0 = [(None, None), None, None]
+        best_node0 = [None, None, None]
         Taus = np.unique(Xtrain) + 0.5
         for i in range(training_iterations):
             print("Iteration", i)
@@ -188,57 +187,75 @@ class BinaryDecisionTree:
 
     def collect_child_nodes(self, X, Y, attribute_index, left_indices, right_indices, classes, depth):
         node_left, node_right = None, None
-        if depth == self.Depth_max:
+        if attribute_index>63 or depth == self.Depth_max:
             return (node_left, node_right)
         #left
         xi, yi = X[attribute_index], Y.reshape(1, -1)[0]
         if len(xi[left_indices]) == self.N_min:
-            node_left = [(None, None), None, yi[left_indices]]
+            node_left = [None, None, yi[left_indices]]
         elif len(xi[left_indices]) > self.N_min and sum(left_indices) != 0:
             H = self.criteria(yi[left_indices], classes)
             if H < self.H_min:
-                node_left = [(None, None), None, yi[left_indices]]
+                node_left = [None, None, yi[left_indices]]
             else:
-                best_attribute_index, best_tau = self.best_tau_for_a_node(X.T[left_indices], yi[left_indices], H, classes)
-                node_left = [(best_attribute_index, best_tau), self.collect_child_nodes(X, Y, best_attribute_index,
+                best_tau = self.best_tau_for_a_node(xi[left_indices], yi[left_indices], H, classes)
+                node_left = [best_tau, self.collect_child_nodes(X, Y, attribute_index+1,
                                                 np.logical_and(left_indices, xi<best_tau),
-                                                np.logical_and(left_indices, xi>best_tau), classes, depth+1),np.array(yi[left_indices])]
+                                                np.logical_and(left_indices, xi>best_tau), classes, depth+1), yi[left_indices]]
         #right
         xi, yi = X[attribute_index], Y.reshape(1, -1)[0]
         if len(xi[right_indices]) == self.N_min:
-            node_right = [(None, None), None, yi[right_indices]]
+            node_right = [None, None, yi[right_indices]]
         elif len(xi[right_indices]) > self.N_min and sum(right_indices) != 0:
             H = self.criteria(yi[right_indices], classes)
             if H < self.H_min:
-                node_right = [(None, None), None, yi[right_indices]]
+                node_right = [None, None, yi[right_indices]]
             else:
-                best_attribute_index, best_tau = self.best_tau_for_a_node(X.T[right_indices], yi[right_indices], H, classes)
-                node_right = [(best_attribute_index, best_tau), self.collect_child_nodes(X, Y, best_attribute_index,
+                best_tau = self.best_tau_for_a_node(xi[right_indices], yi[right_indices], H, classes)
+                node_right = [best_tau, self.collect_child_nodes(X, Y, attribute_index+1,
                                                  np.logical_and(right_indices, xi < best_tau),
-                                                 np.logical_and(right_indices, xi > best_tau), classes, depth+1), np.array(yi[right_indices])]
+                                                 np.logical_and(right_indices, xi > best_tau), classes, depth+1), yi[right_indices]]
         return (node_left, node_right)
 
-    def best_tau_for_a_node(self, X_origin, Y, H, classes):
-        best_attribute_index = None
+    def best_tau_for_a_node(self, X, Y, H, classes):
+        Taus = np.unique(X)
+        if len(Taus) > 1:
+            for i in range(len(Taus)-1):
+                Taus[i] = (Taus[i] + Taus[i+1])/2.0
+            Taus = Taus[:-1]
+        else:
+            return Taus[0] + 0.5
         max_Info_gain = 0
-        for attribute_index in range(len(X_origin.T)):
-            X = X_origin.T[attribute_index]
-            Taus = np.unique(X)
-            if len(Taus) > 1:
-                for i in range(len(Taus)-1):
-                    Taus[i] = (Taus[i] + Taus[i+1])/2.0
-                Taus = Taus[:-1]
+        best_tau = Taus[0]
+        for tau in Taus:
+            I = self.binary_information_gain(X, Y, H, tau, classes)
+            if I > max_Info_gain:
+                max_Info_gain = I
+                best_tau = tau
+        return best_tau
+
+    def show_tree_ends(self, node, depth):
+        if node!=None:
+            if node[1] == None:
+                print(depth, node[0], node[2])
             else:
-                continue
-            best_tau = Taus[0]
-            for tau in Taus:
-                I = self.binary_information_gain(X, Y, H, tau, classes)
-                if I > max_Info_gain:
-                    max_Info_gain = I
-                    best_tau = tau
-                    best_attribute_index = attribute_index
-        print(best_tau, max_Info_gain, best_attribute_index)
-        return best_attribute_index, best_tau
+                self.show_tree_ends(node[1][0], depth+1)
+                self.show_tree_ends(node[1][1], depth+1)
+
+    def show_tree(self, node0):
+        def go_down_the_tree(node, depth):
+            if node != None:
+                self.depth_array[depth].append(str(node[0]))
+                if node[1] != None:
+                    go_down_the_tree(node[1][0], depth+1)
+                    go_down_the_tree(node[1][1], depth+1)
+            else:
+                self.depth_array[depth].append("None")
+        go_down_the_tree(node0, 0)
+        padding_coef = len(max(self.depth_array, key=len)) * 2
+        for i in range(len(self.depth_array)):
+            print(" " * padding_coef + str(self.depth_array[i]))
+            padding_coef -= 2
     #endregion
 
     #region Test and review
@@ -278,7 +295,6 @@ class BinaryDecisionTree:
             predictions.append(prediction)
             probabilities.append(probability)
         return predictions, probabilities
-
     @staticmethod
     def predict_class(node0, x):
         '''
@@ -286,19 +302,17 @@ class BinaryDecisionTree:
         :return: tuple (prediction, probability)
         '''
         current_node = node0
-        while current_node[0][1] != None:
-            if current_node[0][0] == None:
-                break
+        i = 0
+        while current_node[0] != None:
+            if x[i] > current_node[0]:
+                if current_node[1][1] == None:
+                    break
+                current_node = current_node[1][1]
             else:
-                best_attr_idx = current_node[0][0]
-                if x[best_attr_idx] > current_node[0][1]:
-                    if current_node[1][1] == None:
-                        break
-                    current_node = current_node[1][1]
-                else:
-                    if current_node[1][0] == None:
-                        break
-                    current_node = current_node[1][0]
+                if current_node[1][0] == None:
+                    break
+                current_node = current_node[1][0]
+            i+=1
         node_result = current_node[2].tolist()
         prediction = max(node_result, key=node_result.count)
         probability = node_result.count(prediction)/len(node_result)
